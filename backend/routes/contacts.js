@@ -10,6 +10,55 @@ const authenticateToken = require("../middleware/auth");
 
 const jwtKey = process.env.JWTKEY;
 
+async function getSmsPortalToken() {
+  const credentials = Buffer.from(
+    `${process.env.SMSPORTAL_CLIENT_ID}:${process.env.SMSPORTAL_API_SECRET}`
+  ).toString("base64");
+
+  const res = await fetch("https://rest.smsportal.com/Authentication", {
+    method: "GET",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Token error: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.token;
+}
+
+async function sendSMS(number, message) {
+  const smsToken = await getSmsPortalToken();
+
+  const res = await fetch("https://rest.smsportal.com/bulkmessages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${smsToken}`,
+    },
+    body: JSON.stringify({
+      messages: [
+        {
+          content: message,
+          destination: number,
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`SMS send error: ${err}`);
+  }
+
+  return res.json();
+}
+
 //find matches from your contacts
 router.post("/matches", authenticateToken, async (req, res) => {
   try {
@@ -47,7 +96,10 @@ router.post("/request", authenticateToken, async (req, res) => {
     });
 
     if (!targetUser) {
-      return res.status(404).json({ message: "User not found on app" });
+      const user = await User.findById(req.user.userid)
+      await sendSMS(normalized, `${user.firstName} would like you to be their emergency contact for thebe-ya-batho`)
+
+      return res.status(200).json({message: `${user.firstName} would like you to be their emergency contact for thebe-ya-batho`})
     }
 
     if (targetUser._id.toString() === req.user.userid) {
@@ -67,6 +119,7 @@ router.post("/request", authenticateToken, async (req, res) => {
     const request = await ContactRequest.create({
       from: req.user.userid,
       to: targetUser._id,
+      appUser: true
     });
 
     res
