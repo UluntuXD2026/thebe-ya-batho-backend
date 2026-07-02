@@ -274,4 +274,15 @@ router.get("/get-name/:id", authenticateToken, async(req, res) => {
   }
 })
 
+router.push("/push-token", authenticateToken, async(req, res) => {
+  try{
+    const {pushToken} = req.body
+    await User.findByIdAndUpdate(req.user.userid, {pushToken})
+    res.status(200).json({message: "push token saved"})
+  }
+  catch(err){
+    res.status(500).json({message: "internal server error", err})
+  }
+})
+
 module.exports = router;

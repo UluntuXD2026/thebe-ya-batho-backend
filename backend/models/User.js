@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema(
     verificationCodeExpires: Date,
 
     refreshToken: String,
+
+    pushToken: {
+      type: String
+    },
   },
   { timestamps: true },
 );
