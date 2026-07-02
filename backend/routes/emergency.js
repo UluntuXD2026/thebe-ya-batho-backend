@@ -5,15 +5,25 @@ const router = express.Router();
 const { sendNotification } = require("../services/notificationService");
 const authenticateToken = require("../middleware/auth");
 const EmergencyAlert = require("../models/EmergencyAlert");
+const { sendSMS } = require("../utils/sms");
 
 router.post("/", authenticateToken, async (req, res) => {
   try {
     const { type, location } = req.body;
 
-    const contacts = await ContactRequest.find({
+    const user = await User.findById(req.user.userid);
+
+    const appUserContacts = await ContactRequest.find({
       from: req.user.userid,
       status: "accepted",
+      appUser: true,
     }).populate("to", "firstName lastName number");
+
+    const smsOnlyContacts = await ContactRequest.find({
+      from: req.user.userid,
+      status: "accepted",
+      appUser: false,
+    });
 
     const alert = await EmergencyAlert.create({
       user: req.user.userid,
@@ -21,8 +31,8 @@ router.post("/", authenticateToken, async (req, res) => {
       location,
     });
 
-    for (let x = 0; x < contacts.length; x++) {
-      await sendNotification(contacts[x].to._id, {
+    for (let x = 0; x < appUserContacts.length; x++) {
+      await sendNotification(appUserContacts[x].to._id, {
         title: "Emergency Alert",
         body: "Your contact needs help",
         data: {
@@ -33,6 +43,22 @@ router.post("/", authenticateToken, async (req, res) => {
           sender: req.user.userid,
         },
       });
+    }
+
+    const mapsLink =
+      location?.lat && location?.lng
+        ? ` Location: https://maps.google.com/?q=${location.lat},${location.lng}`
+        : "";
+
+    const smsBody = `EMERGENCY: ${user.firstName} needs help (${type}).${mapsLink}`;
+
+    for (let x = 0; x < smsOnlyContacts.length; x++) {
+      try {
+        await sendSMS(smsOnlyContacts[x].toNumber, smsBody);
+      } catch (err) {
+        console.log("Emergency SMS failed:", err.message);
+        // don't let one failed SMS block the others or fail the whole request
+      }
     }
 
     res.status(200).json({ message: "Emergency sent" });

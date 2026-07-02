@@ -5,59 +5,60 @@ const User = require("../models/User");
 const ContactRequest = require("../models/ContactRequest");
 const router = express.Router();
 const normalizeSouthAfricanNumber = require("../utils/phone");
+const { sendSMS } = require("../utils/sms");
 
 const authenticateToken = require("../middleware/auth");
 
 const jwtKey = process.env.JWTKEY;
 
-async function getSmsPortalToken() {
-  const credentials = Buffer.from(
-    `${process.env.SMSPORTAL_CLIENT_ID}:${process.env.SMSPORTAL_API_SECRET}`
-  ).toString("base64");
+// async function getSmsPortalToken() {
+//   const credentials = Buffer.from(
+//     `${process.env.SMSPORTAL_CLIENT_ID}:${process.env.SMSPORTAL_API_SECRET}`,
+//   ).toString("base64");
 
-  const res = await fetch("https://rest.smsportal.com/Authentication", {
-    method: "GET",
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/json",
-    },
-  });
+//   const res = await fetch("https://rest.smsportal.com/Authentication", {
+//     method: "GET",
+//     headers: {
+//       Authorization: `Basic ${credentials}`,
+//       "Content-Type": "application/json",
+//     },
+//   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Token error: ${err}`);
-  }
+//   if (!res.ok) {
+//     const err = await res.text();
+//     throw new Error(`Token error: ${err}`);
+//   }
 
-  const data = await res.json();
-  return data.token;
-}
+//   const data = await res.json();
+//   return data.token;
+// }
 
-async function sendSMS(number, message) {
-  const smsToken = await getSmsPortalToken();
+// async function sendSMS(number, message) {
+//   const smsToken = await getSmsPortalToken();
 
-  const res = await fetch("https://rest.smsportal.com/bulkmessages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${smsToken}`,
-    },
-    body: JSON.stringify({
-      messages: [
-        {
-          content: message,
-          destination: number,
-        },
-      ],
-    }),
-  });
+//   const res = await fetch("https://rest.smsportal.com/bulkmessages", {
+//     method: "POST",
+//     headers: {
+//       "Content-Type": "application/json",
+//       Authorization: `Bearer ${smsToken}`,
+//     },
+//     body: JSON.stringify({
+//       messages: [
+//         {
+//           content: message,
+//           destination: number,
+//         },
+//       ],
+//     }),
+//   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`SMS send error: ${err}`);
-  }
+//   if (!res.ok) {
+//     const err = await res.text();
+//     throw new Error(`SMS send error: ${err}`);
+//   }
 
-  return res.json();
-}
+//   return res.json();
+// }
 
 //find matches from your contacts
 router.post("/matches", authenticateToken, async (req, res) => {
@@ -96,10 +97,24 @@ router.post("/request", authenticateToken, async (req, res) => {
     });
 
     if (!targetUser) {
-      const user = await User.findById(req.user.userid)
-      await sendSMS(normalized, `${user.firstName} would like you to be their emergency contact for thebe-ya-batho`)
+      const user = await User.findById(req.user.userid);
 
-      return res.status(200).json({message: `${user.firstName} would like you to be their emergency contact for thebe-ya-batho`})
+      const request = await ContactRequest.create({
+        from: req.user.userid,
+        toNumber: normalized,
+        appUser: false,
+        status: "accepted", // no login = no accept step, so this is the relationship
+      });
+
+      await sendSMS(
+        normalized,
+        `${user.firstName} would like you to be their emergency contact for thebe-ya-batho. Reply STOP to opt out.`,
+      );
+
+      return res.status(200).json({
+        message: `${user.firstName} would like you to be their emergency contact for thebe-ya-batho`,
+        request,
+      });
     }
 
     if (targetUser._id.toString() === req.user.userid) {
@@ -119,7 +134,7 @@ router.post("/request", authenticateToken, async (req, res) => {
     const request = await ContactRequest.create({
       from: req.user.userid,
       to: targetUser._id,
-      appUser: true
+      appUser: true,
     });
 
     res
@@ -234,55 +249,56 @@ router.get("/emergency-contact-for", authenticateToken, async (req, res) => {
 });
 
 //delete an emergency contact
-router.delete("/emergency-contact-remove/:id", authenticateToken, async(req, res) => {
-  try{
-    const contact = await ContactRequest.findById(req.params.id)
+router.delete(
+  "/emergency-contact-remove/:id",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const contact = await ContactRequest.findById(req.params.id);
 
-    if(!contact){
-      return res.status(404).json({message: "Contact not found"})
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      if (contact.from.toString() !== req.user.userid) {
+        return res.status(403).json({
+          message: "not allowed",
+        });
+      }
+
+      await contact.deleteOne();
+
+      res.status(200).json({
+        message: "Emergency contact removed",
+      });
+    } catch (err) {
+      res.status(500).json({ message: "internal server error", err });
+    }
+  },
+);
+
+router.get("/get-name/:id", authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "no user found" });
     }
 
-    if(contact.from.toString() !== req.user.userid){
-      return res.status(403).json({
-        message: "not allowed"
-      })
-    }
-
-    await contact.deleteOne()
-
-    res.status(200).json({
-      message: "Emergency contact removed"
-    })
-  }
-  catch(err){
+    res.status(200).json({ name: `${user.firstName} ${user.lastName}` });
+  } catch (err) {
     res.status(500).json({ message: "internal server error", err });
   }
-})
+});
 
-router.get("/get-name/:id", authenticateToken, async(req, res) => {
-  try{
-    const user = await User.findById(req.params.id)
-
-    if(!user){
-      return res.status(404).json({message: "no user found"})
-    }
-
-    res.status(200).json({name: `${user.firstName} ${user.lastName}`})
-  }
-  catch(err){
+router.post("/push-token", authenticateToken, async (req, res) => {
+  try {
+    const { pushToken } = req.body;
+    await User.findByIdAndUpdate(req.user.userid, { pushToken });
+    res.status(200).json({ message: "push token saved" });
+  } catch (err) {
     res.status(500).json({ message: "internal server error", err });
   }
-})
-
-router.push("/push-token", authenticateToken, async(req, res) => {
-  try{
-    const {pushToken} = req.body
-    await User.findByIdAndUpdate(req.user.userid, {pushToken})
-    res.status(200).json({message: "push token saved"})
-  }
-  catch(err){
-    res.status(500).json({message: "internal server error", err})
-  }
-})
+});
 
 module.exports = router;

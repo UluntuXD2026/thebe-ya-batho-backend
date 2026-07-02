@@ -9,7 +9,11 @@ const ContactRequestSchema = new mongoose.Schema({
     to: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
-        required: true
+        required: false
+    },
+    toNumber: {
+        type: String,
+        required: false
     },
     status: {
         type: String,
@@ -19,6 +23,10 @@ const ContactRequestSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    appUser: {
+        type: Boolean,
+        default: true
     }
 })
 
