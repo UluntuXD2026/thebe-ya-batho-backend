@@ -25,4 +25,16 @@ router.post("/mark-read/:id", authenticateToken, async(req, res) => {
     res.status(200).json({message: "notification marked as read"})
 })
 
+router.post("/mark-read-by-emergency/:emergencyId", authenticateToken, async (req, res) => {
+  try {
+    await Notifications.updateMany(
+      { user: req.user.userid, "data.emergencyId": req.params.emergencyId },
+      { read: true }
+    );
+    res.status(200).json({ message: "marked as read" });
+  } catch (err) {
+    res.status(500).json({ message: "internal server error", err });
+  }
+});
+
 module.exports = router;
