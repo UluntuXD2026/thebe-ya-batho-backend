@@ -112,7 +112,13 @@ router.post("/resolve/:id", authenticateToken, async (req, res) => {
     await notifyContacts(req.user.userid, {
       title: "Emergency resolved",
       body: `${user.firstName} is safe. The emergency has been resolved.`,
-      data: { emergencyId: alert._id, type: alert.type, status: "resolved" },
+      data: {
+        emergencyId: alert._id,
+        type: alert.type,
+        status: "resolved",
+        time: alert.updatedAt,
+        sender: req.user.userid,
+      },
     });
 
     res.status(200).json({ message: "emergency has been resolved" });
