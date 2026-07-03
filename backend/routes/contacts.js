@@ -6,6 +6,7 @@ const ContactRequest = require("../models/ContactRequest");
 const router = express.Router();
 const normalizeSouthAfricanNumber = require("../utils/phone");
 const { sendSMS } = require("../utils/sms");
+const { sendNotification } = require("../services/notificationService");
 
 const authenticateToken = require("../middleware/auth");
 
@@ -137,6 +138,13 @@ router.post("/request", authenticateToken, async (req, res) => {
       appUser: true,
     });
 
+    const requester = await User.findById(req.user.userid);
+    await sendNotification(targetUser._id, {
+      title: "New contact request",
+      body: `${requester.firstName} wants to add you as an emergency contact`,
+      data: { type: "contact-request", requestId: request._id },
+    });
+
     res
       .status(201)
       .json({ message: "Emergency contact request sent", request });
@@ -186,6 +194,13 @@ router.post("/request/:id/accept", authenticateToken, async (req, res) => {
     request.status = "accepted";
     await request.save();
 
+    const accepter = await User.findById(req.user.userid);
+    await sendNotification(request.from, {
+      title: "Request accepted",
+      body: `${accepter.firstName} accepted your contact request`,
+      data: { type: "contact-accepted", requestId: request._id },
+    });
+
     res.status(200).json({ message: "Contact added" });
   } catch (err) {
     res.status(500).json({ message: "internal server error", err });
@@ -213,6 +228,13 @@ router.post("/request/:id/reject", authenticateToken, async (req, res) => {
 
     request.status = "rejected";
     await request.save();
+
+    const rejecter = await User.findById(req.user.userid);
+    await sendNotification(request.from, {
+      title: "Request declined",
+      body: `${rejecter.firstName} declined your contact request`,
+      data: { type: "contact-rejected", requestId: request._id },
+    });
 
     res.status(200).json({ message: "Request rejected" });
   } catch (err) {
