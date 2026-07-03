@@ -7,8 +7,6 @@ const authenticateToken = require("../middleware/auth");
 const EmergencyAlert = require("../models/EmergencyAlert");
 const { sendSMS } = require("../utils/sms");
 
-const { sendSMS } = require("../utils/sms");
-
 async function notifyContacts(userId, { title, body, data }) {
   const appUserContacts = await ContactRequest.find({
     from: userId,
