@@ -37,4 +37,16 @@ router.post("/mark-read-by-emergency/:emergencyId", authenticateToken, async (re
   }
 });
 
+router.post("/mark-read-by-request/:requestId", authenticateToken, async (req, res) => {
+  try {
+    await Notifications.updateMany(
+      { user: req.user.userid, "data.requestId": req.params.requestId },
+      { read: true }
+    );
+    res.status(200).json({ message: "marked as read" });
+  } catch (err) {
+    res.status(500).json({ message: "internal server error", err });
+  }
+});
+
 module.exports = router;
