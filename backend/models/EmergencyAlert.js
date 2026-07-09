@@ -9,7 +9,7 @@ const EmergencyAlertSchema = new mongoose.Schema({
 
     type: {
         type: String,
-        enum: ["police", "ambulance", "fire", "other"],
+        enum: ["police", "ambulance", "fire", "help", "other"],
         required: true
     },
 
