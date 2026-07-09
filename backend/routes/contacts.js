@@ -323,4 +323,33 @@ router.post("/push-token", authenticateToken, async (req, res) => {
   }
 });
 
+router.post("/set-contact-name/:id", authenticateToken, async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: "name is required" });
+    }
+
+    const contact = await ContactRequest.findById(req.params.id);
+
+    if (!contact) {
+      return res.status(404).json({ message: "contact not found" });
+    }
+
+    if (contact.from.toString() !== req.user.userid) {
+      return res.status(403).json({ message: "not allowed" });
+    }
+
+    contact.contactName = name.trim();
+    await contact.save();
+
+    res
+      .status(200)
+      .json({ message: "name saved", contactName: contact.contactName });
+  } catch (err) {
+    res.status(500).json({ message: "internal server error", err });
+  }
+});
+
 module.exports = router;
