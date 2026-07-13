@@ -35,13 +35,14 @@ async function notifyContacts(userId, { title, body, data }) {
 
 router.post("/", authenticateToken, async (req, res) => {
   try {
-    const { type, location } = req.body;
+    const { type, location, description } = req.body;
     const user = await User.findById(req.user.userid);
 
     const alert = await EmergencyAlert.create({
       user: req.user.userid,
       type,
       location,
+      description,
     });
 
     const mapsLink =
@@ -49,12 +50,18 @@ router.post("/", authenticateToken, async (req, res) => {
         ? ` Location: https://maps.google.com/?q=${location.lat},${location.lng}`
         : "";
 
+    const typeLabel =
+      type === "other" && description
+        ? description
+        : type.charAt(0).toUpperCase() + type.slice(1);
+
     await notifyContacts(req.user.userid, {
       title: "Emergency Alert",
-      body: `${user.firstName} needs help (${type}).${mapsLink}`,
+      body: `${user.firstName} needs help (${typeLabel}).${mapsLink}`,
       data: {
         emergencyId: alert._id,
         type,
+        description,
         location,
         time: alert.createdAt,
         sender: req.user.userid,
